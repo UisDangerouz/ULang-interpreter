@@ -1,0 +1,28 @@
+* {
+    font-family: 'Arial';
+}
+
+body {
+    text-align: center;
+    background-color: #cccccc;
+}
+
+textarea {
+    resize: none;
+    width: 60%;
+    height: 300px;
+
+    padding: 10px;
+    margin: 10px;
+
+    font-family: 'Consolas';
+}
+
+.btn {
+    font-size: 20px;
+    width: 20%;
+    height: 50px;
+    background-color: #3a3a3a;
+    color: white;
+    font-weight: bold;
+}

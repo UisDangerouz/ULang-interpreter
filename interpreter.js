@@ -6,15 +6,16 @@ $("#output").css('background-color', '#3a3a3a')
 
 //ERROR CODES
 function getError(index) {
-    const errorCodes = ['Overflow error'];
-    if(index) {
-        return errorCodes[i];
+    const errorCodes = ['Overflow error', 'Solve takes 3 arguments', 'No solution found'];
+
+    if(index == -1) {
+        return errorCodes;
     } else {
-        return errorCodes
+        return errorCodes[index];
     }
 }
 function hasError(source) {
-    const errorCodes = getError();
+    const errorCodes = getError(-1);
     for(let i = 0; i < errorCodes.length; i++) {
         if(source.includes(errorCodes[i])) {
             return i;
@@ -35,14 +36,52 @@ function run() {
 }
 
 function evaluate(expression) {
-    if(!expression) {
-        return '';
+    if(!expression || hasError(expression)) {
+        return expression;
     }
+
+    //FINDS SOLVE COMMANDS AND EVALUATES THEM FIRST
+    let solveBlock = getOutermostBlock(expression, 'solve(', ')')
+    while(solveBlock) {
+        let args = solveBlock.content.split(',')
+        let equation = args[0].split('=');
+        let variable = args[1];
+        //IF INCORRECT ARGUMENTS GIVES ERROR
+        if(!variable || equation.length != 2) {
+            return getError(1);
+        }
+
+        //BRUTE FORCES EQUATION
+        let solutionFound = false;
+        for(let testValue = -1000; testValue <= 1000; testValue += 0.05) {
+            let leftSide = evaluate(equation[0].replaceAll(variable, testValue));
+            let rightSide = evaluate(equation[1].replaceAll(variable, testValue));
+
+            if(Math.abs(leftSide - rightSide) <= 0.1) {
+                testValue = Number(testValue).toFixed(3);
+                solutionFound = true;
+                expression = replaceSection(expression, solveBlock.start, solveBlock.end, testValue);
+                output(variable + '=' + testValue);
+                break;
+            }
+        }
+        if(!solutionFound) {
+            return getError(2);
+        }
+
+        solveBlock = getOutermostBlock(expression, 'solve(', ')')
+    }
+    /*
+    let block = getOutermostBlock(expression, 'solve(', ')')
+    alert('outermost block start: ' + block.start + ' end: ' + block.end + ' content: ' + block.content);
+    alert(expression.substring(block.start, block.end));
+    */
 
     //FINDS INNER BLOCKS AND EVALUETES THEM RECURSIVELY
     let innerBlock = getOutermostBlock(expression, '(', ')');
     while(innerBlock) {
-        let evalueatedBlock = evaluate(expression.substring(innerBlock.start + 1, innerBlock.end - 1));
+        //alert(innerBlock.content);
+        let evalueatedBlock = evaluate(innerBlock.content);
         expression = replaceSection(expression, innerBlock.start, innerBlock.end, evalueatedBlock);
 
         innerBlock = getOutermostBlock(expression, '(', ')');
@@ -111,47 +150,28 @@ function seperateOperationElements(source) {
     return elements;
 }
 
-function getArrayElement(array, charIndex) {
-    let strLenght = 0;
-    for(let i = 0; i < array.length; i++) {
-        strLenght += array[i].length;
-        if(charIndex <= strLenght) {
-            return array[i];
-        }
-    }
-}
-
-function multiSplit(str, splitChars){
-    var tempChar = splitChars[0];
-    for(var i = 1; i < splitChars.length; i++){
-        str = str.split(splitChars[i]).join(tempChar);
-    }
-    str = str.split(tempChar);
-    return str;
-}
-
-function getOutermostBlock(source, leftChar, rightChar) {
-    let characterPos = {};
+function getOutermostBlock(source, leftMarker, rightMarker) {
+    let block = {};
 
     //KEEPS TRACK OF HOW MANY INNER BLOCKS THERE ARE
     let blockDepth = 0;
     
     for(let i = 0; i < source.length; i++) {
-        if(source.charAt(i) == leftChar) {
-            if(!characterPos.start) {
-                characterPos.start = i;
+        if(source.substring(i, i + leftMarker.length) == leftMarker) {
+            if(!block.start) {
+                block.start = i;
             } else {
                 blockDepth++;
             }
-        } else if(source.charAt(i) == rightChar) {
+        } else if(source.substring(i, i + rightMarker.length) == rightMarker) {
             break;
         }
     }
 
-    for(let i = characterPos.start; i < source.length; i++) {
-        if(source.charAt(i) == rightChar) {
+    for(let i = block.start; i < source.length; i++) {
+        if(source.substring(i, i + rightMarker.length) == rightMarker) {
             if(blockDepth == 0) {
-                characterPos.end = i + 1;
+                block.end = i + rightMarker.length;
                 break;
             } else {
                 blockDepth--;
@@ -159,8 +179,9 @@ function getOutermostBlock(source, leftChar, rightChar) {
         }
     }
 
-    if(characterPos && characterPos.start < characterPos.end) {
-        return characterPos
+    if(block && block.start < block.end) {
+        block.content = source.substring(block.start + leftMarker.length, block.end - 1);
+        return block;
     } else {
         return;
     }
@@ -191,15 +212,6 @@ function applyOperator(factors, operator) {
     }
 }
 
-function getOperatorIndex(source) {
-    for(let i = 0; i < source.length; i++) {
-        if('+-*/'.includes(source.charAt(i))) {
-            return i;
-        }
-    }
-    return false;
-}
-
 function charIsOperator(char) {
     if('+-*/'.includes(char)) {
         return true;
@@ -207,6 +219,11 @@ function charIsOperator(char) {
         return false;
     }
 }
+
+String.prototype.replaceAll = function(search, replacement) {
+    var target = this;
+    return target.replace(new RegExp(search, 'g'), replacement);
+};
 
 function includesAnyChar(source, chars) {
     for(let i = 0; i < chars.length; i++) {
@@ -218,5 +235,11 @@ function includesAnyChar(source, chars) {
 }
 
 function output(text) {
-    $('#output').val($('#output').val() + text + '\n');
+    //CHECKS THAT LAST LINE IS NOT THE SAME AS NEW LINE
+    let content = $('#output').val();
+    let lastLine = content.split('\n');
+    lastLine = lastLine[lastLine.length -2];
+    if(lastLine != text) {
+        $('#output').val(content + text + '\n');
+    }   
 }
